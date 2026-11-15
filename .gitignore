@@ -1,9 +1,10 @@
 .env
-data/
-exports/
+/data/
+/exports/
+/bin/
 *.db
 *.db-shm
 *.db-wal
 *.log
-firms
+/firms
 .DS_Store
