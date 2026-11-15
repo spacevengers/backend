@@ -1,21 +1,30 @@
 # Presentation and demo runbook
 
-## One-command demo
+## One-command demo data
 
 ```bash
 cd backend
 ./scripts/demo.sh
 ```
 
-This creates `data/demo.db`, ingests the bundled MODIS/VIIRS samples, runs
-matching at 1.5 km / 30 min, starts the API on `:8000`, and imports **clearly
-labelled placeholder predictions** (`demo-placeholder-not-ml`).
+This **only populates the configured database**: it applies migrations, ingests
+the bundled MODIS/VIIRS samples, runs matching at 1.5 km / 30 min, and imports
+**clearly labelled placeholder predictions** (`demo-placeholder-not-ml`). It
+does not start or stop the API, and it does not delete an existing database.
 
-Then:
+Then start the binary yourself:
+
+```bash
+./bin/firms serve
+```
+
+The API address comes from `API_ADDR` in `.env` or the environment (default
+`:9999`). If you already built the binary and do not want the script to rebuild
+it, use `SKIP_BUILD=1 ./scripts/demo.sh`. In another terminal:
 
 ```bash
 cd ../frontend
-NEXT_PUBLIC_API_URL=http://localhost:8000 pnpm dev --port 3100
+NEXT_PUBLIC_API_URL=http://localhost:9999 pnpm dev --port 3100
 ```
 
 Open <http://localhost:3100/map> and select **Backend · month → January 2024**.
@@ -86,7 +95,7 @@ FIRMS → Go ingestion → SQLite → matching → API → Next.js map
    - deterministic observation UID makes ingestion idempotent;
    - raw values are preserved next to standardized values;
    - matching is one-directional VIIRS → MODIS to avoid chaining.
-4. Show `curl http://localhost:8000/api/integration/statistics?...` live.
+4. Show `curl http://localhost:9999/api/integration/statistics?...` live.
 5. Optional: open `/calendar`; the chip should say **Backend archive** for the
    months the backend has data for, and fall back to the static archive
    elsewhere.
@@ -135,22 +144,23 @@ Terminal 1:
 ```bash
 cd backend
 ./scripts/demo.sh
+./bin/firms serve
 ```
 
 Terminal 2:
 
 ```bash
 cd frontend
-NEXT_PUBLIC_API_URL=http://localhost:8000 pnpm dev --port 3100
+NEXT_PUBLIC_API_URL=http://localhost:9999 pnpm dev --port 3100
 ```
 
 Useful API checks:
 
 ```bash
-curl 'http://localhost:8000/health'
-curl 'http://localhost:8000/api/integration/statistics?start=2024-01-01&end=2024-01-03&bbox=33.5,-5,42,5.5'
-curl 'http://localhost:8000/api/integration/firms?start=2024-01-01&end=2024-01-03&bbox=33.5,-5,42,5.5'
-curl 'http://localhost:8000/api/integration/harmonized-observations?start=2024-01-01&end=2024-01-03'
+curl 'http://localhost:9999/health'
+curl 'http://localhost:9999/api/integration/statistics?start=2024-01-01&end=2024-01-03&bbox=33.5,-5,42,5.5'
+curl 'http://localhost:9999/api/integration/firms?start=2024-01-01&end=2024-01-03&bbox=33.5,-5,42,5.5'
+curl 'http://localhost:9999/api/integration/harmonized-observations?start=2024-01-01&end=2024-01-03'
 ```
 
 ## Likely questions

@@ -15,7 +15,7 @@ Set:
 
 ```bash
 # frontend/.env.local
-NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_API_URL=http://localhost:9999
 ```
 
 The frontend has a **Backend · month** mode on the map and globe when the
@@ -69,7 +69,7 @@ the contract in `docs/harmonization.md` and may set `p_modis_detect`,
 4. Import:
 
 ```bash
-curl -X POST http://localhost:8000/api/harmonization-runs/1/predictions \
+curl -X POST http://localhost:9999/api/harmonization-runs/1/predictions \
   -H 'Content-Type: application/json' \
   -d '{
     "model": "lightgbm-2026-11-15",

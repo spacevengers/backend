@@ -35,7 +35,7 @@ library server; this document is the contract.
 | `order` | `asc` or `desc` |
 
 ```bash
-curl "http://localhost:8000/api/observations?sensor=VIIRS&start=2024-01-01&end=2024-01-31&bbox=33.5,-5,42,5.5&limit=100"
+curl "http://localhost:9999/api/observations?sensor=VIIRS&start=2024-01-01&end=2024-01-31&bbox=33.5,-5,42,5.5&limit=100"
 ```
 
 ### `GET /api/observations/geojson`

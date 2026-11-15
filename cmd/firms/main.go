@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"os/signal"
@@ -44,6 +45,8 @@ func main() {
 		err = runHarmonize(cfg, os.Args[2:])
 	case "import-predictions":
 		err = runImportPredictions(cfg, os.Args[2:])
+	case "demo-predictions":
+		err = runDemoPredictions(cfg, os.Args[2:])
 	case "stats":
 		err = runStats(cfg, os.Args[2:])
 	case "help", "-h", "--help":
@@ -67,6 +70,7 @@ Usage:
   firms ingest-file  Ingest a local FIRMS CSV
   firms harmonize    Run spatial-temporal matching
   firms import-predictions  Import ML predictions for a harmonization run
+  firms demo-predictions    Attach clearly-labelled placeholder predictions
   firms stats        Count stored observations`)
 }
 
@@ -353,6 +357,70 @@ func runImportPredictions(cfg config.Config, args []string) error {
 	}
 	return printJSON(map[string]any{
 		"run_id": run.ID, "model": *model, "updated": updated,
+	})
+}
+
+func runDemoPredictions(cfg config.Config, args []string) error {
+	flags := flag.NewFlagSet("demo-predictions", flag.ContinueOnError)
+	runID := flags.Int64("run-id", 0, "completed harmonization run id")
+	model := flags.String("model", "demo-placeholder-not-ml", "demo model label")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if *runID <= 0 {
+		return fmt.Errorf("--run-id is required")
+	}
+	repository, err := openStore(cfg, cfg.AutoMigrate)
+	if err != nil {
+		return err
+	}
+	defer repository.Close()
+	ctx := context.Background()
+
+	run, err := repository.GetHarmonizationRun(ctx, *runID)
+	if err != nil {
+		return err
+	}
+	if run.Status != "completed" {
+		return fmt.Errorf("run %d is %q, not completed", run.ID, run.Status)
+	}
+	clusters, err := repository.ListHarmonized(ctx, query.HarmonizedFilter{RunID: &run.ID}, 100000, 0)
+	if err != nil {
+		return err
+	}
+	ids := make([]int64, 0, len(clusters))
+	for _, cluster := range clusters {
+		ids = append(ids, cluster.ID)
+	}
+	aggregates, err := repository.MemberAggregates(ctx, ids)
+	if err != nil {
+		return err
+	}
+	predictions := make([]store.Prediction, 0, len(clusters))
+	for _, cluster := range clusters {
+		if cluster.MODISCount == 0 || cluster.VIIRSCount == 0 {
+			continue
+		}
+		aggregate := aggregates[cluster.ID]
+		if aggregate.FRPVIIRS == nil {
+			continue
+		}
+		frp := *aggregate.FRPVIIRS
+		probability := math.Max(0.05, math.Min(0.95, 0.15+0.03*frp))
+		calibrated := math.Round(frp*0.97*100) / 100
+		predictions = append(predictions, store.Prediction{
+			ClusterUID:    cluster.ClusterUID,
+			PModisDetect:  &probability,
+			FRPCalibrated: &calibrated,
+		})
+	}
+	updated, err := repository.UpdatePredictions(ctx, run.ID, *model, predictions)
+	if err != nil {
+		return err
+	}
+	return printJSON(map[string]any{
+		"run_id": run.ID, "model": *model, "updated": updated,
+		"note": "placeholder values for integration demos; not ML results",
 	})
 }
 

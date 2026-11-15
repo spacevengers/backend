@@ -23,9 +23,9 @@ go run ./cmd/firms harmonize --start 2024-01-01 --end 2024-01-03
 go run ./cmd/firms serve
 ```
 
-- API docs: <http://localhost:8000/docs> is not generated; see
+- API docs: <http://localhost:9999/docs> is not generated; see
   [`docs/api.md`](docs/api.md) and `/health`.
-- One-command demo: `./scripts/demo.sh`
+- One-command demo data: `./scripts/demo.sh` (does not start the API)
 - Presentation runbook: [`docs/demo.md`](docs/demo.md)
 - Tests: `go test ./...`
 - Docker: `docker compose up --build`

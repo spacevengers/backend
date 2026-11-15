@@ -9,7 +9,7 @@ services:
       ADMIN_TOKEN: ${ADMIN_TOKEN:-}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:3100,http://localhost:5173}
     ports:
-      - "8000:8000"
+      - "9999:9999"
     volumes:
       - firms-data:/app/data
       - firms-exports:/app/exports

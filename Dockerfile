@@ -20,8 +20,8 @@ USER firms
 ENV DATABASE_PATH=/app/data/firms.db \
     EXPORT_DIR=/app/exports \
     AUTO_MIGRATE=true \
-    API_ADDR=:8000
+    API_ADDR=:9999
 
-EXPOSE 8000
+EXPOSE 9999
 ENTRYPOINT ["firms"]
 CMD ["serve"]
