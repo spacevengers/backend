@@ -293,11 +293,12 @@ func (s *Server) handleIntegrationFirms(w http.ResponseWriter, r *http.Request) 
 }
 
 type liveCluster struct {
-	ClusterUID    string   `json:"cluster_uid"`
-	MemberIDs     []string `json:"member_ids"`
-	MatchStatus   string   `json:"match_status"`
-	PModisDetect  *float64 `json:"p_modis_detect"`
-	FRPCalibrated *float64 `json:"frp_calibrated"`
+	ClusterUID      string   `json:"cluster_uid"`
+	MemberIDs       []string `json:"member_ids"`
+	MatchStatus     string   `json:"match_status"`
+	PModisDetect    *float64 `json:"p_modis_detect"`
+	FRPCalibrated   *float64 `json:"frp_calibrated"`
+	PredictionModel *string  `json:"prediction_model"`
 }
 
 type compactData struct {
@@ -426,6 +427,7 @@ func buildCompact(
 		if prediction, ok := predictions[clusterKey(ids)]; ok {
 			entry.PModisDetect = prediction.PModisDetect
 			entry.FRPCalibrated = prediction.FRPCalibrated
+			entry.PredictionModel = prediction.PredictionModel
 		}
 		out.Clusters = append(out.Clusters, entry)
 	}

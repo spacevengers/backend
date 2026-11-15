@@ -359,11 +359,12 @@ func (s *Store) MemberAggregates(
 }
 
 type ClusterPrediction struct {
-	ClusterUID    string
-	MemberIDs     []int64
-	PModisDetect  *float64
-	FRPCalibrated *float64
-	MatchStatus   string
+	ClusterUID      string
+	MemberIDs       []int64
+	PModisDetect    *float64
+	FRPCalibrated   *float64
+	PredictionModel *string
+	MatchStatus     string
 }
 
 func (s *Store) ClusterPredictions(
@@ -371,7 +372,7 @@ func (s *Store) ClusterPredictions(
 ) ([]ClusterPrediction, error) {
 	rows, err := s.DB.QueryContext(ctx, `
 		SELECT ho.cluster_uid, hm.observation_id, ho.p_modis_detect,
-			ho.frp_calibrated, ho.modis_count, ho.viirs_count
+			ho.frp_calibrated, ho.prediction_model, ho.modis_count, ho.viirs_count
 		FROM harmonized_observations ho
 		JOIN harmonized_members hm ON hm.harmonized_id = ho.id
 		WHERE ho.run_id = ?
@@ -387,9 +388,10 @@ func (s *Store) ClusterPredictions(
 		var clusterUID string
 		var observationID int64
 		var pModis, frpCalibrated sql.NullFloat64
+		var predictionModel sql.NullString
 		var modisCount, viirsCount int
 		if err := rows.Scan(&clusterUID, &observationID, &pModis, &frpCalibrated,
-			&modisCount, &viirsCount); err != nil {
+			&predictionModel, &modisCount, &viirsCount); err != nil {
 			return nil, err
 		}
 		entry, ok := byUID[clusterUID]
@@ -405,6 +407,7 @@ func (s *Store) ClusterPredictions(
 			}
 			entry.PModisDetect = nullFloat(pModis)
 			entry.FRPCalibrated = nullFloat(frpCalibrated)
+			entry.PredictionModel = nullString(predictionModel)
 			byUID[clusterUID] = entry
 			order = append(order, clusterUID)
 		}

@@ -25,6 +25,8 @@ go run ./cmd/firms serve
 
 - API docs: <http://localhost:8000/docs> is not generated; see
   [`docs/api.md`](docs/api.md) and `/health`.
+- One-command demo: `./scripts/demo.sh`
+- Presentation runbook: [`docs/demo.md`](docs/demo.md)
 - Tests: `go test ./...`
 - Docker: `docker compose up --build`
 
