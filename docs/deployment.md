@@ -1,5 +1,32 @@
 # Podman deployment
 
+## Why host networking
+
+Some VPS/LXC hosts cannot create a Podman bridge:
+
+```text
+netavark: create bridge: Netlink error: Operation not supported (os error 95)
+```
+
+The compose file therefore uses `network_mode: host`. The API listens directly
+on the host at `:9999`; there is no `ports:` mapping. Make sure nothing else is
+using 9999.
+
+If host networking is unavailable too, run the image directly:
+
+```bash
+podman build -t space-backend .
+
+podman run -d --name space-backend --network host \
+  --env-file .env \
+  -e DATABASE_PATH=/app/data/firms.db \
+  -e EXPORT_DIR=/app/exports \
+  -e API_ADDR=:9999 \
+  -v space-data:/app/data \
+  -v space-exports:/app/exports \
+  space-backend serve
+```
+
 ## Run
 
 ```bash

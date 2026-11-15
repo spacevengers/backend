@@ -3,6 +3,10 @@ services:
     build: .
     container_name: space-backend
     restart: unless-stopped
+    # Some VPS/LXC hosts cannot create a Podman bridge
+    # (netavark: create bridge: Operation not supported).
+    # Host networking avoids bridge creation; the app listens on :9999.
+    network_mode: host
     environment:
       DATABASE_PATH: /app/data/firms.db
       EXPORT_DIR: /app/exports
@@ -12,8 +16,6 @@ services:
       FIRMS_MAP_KEY: ${FIRMS_MAP_KEY:-}
       ADMIN_TOKEN: ${ADMIN_TOKEN:-}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:3100,http://localhost:5173}
-    ports:
-      - "9999:9999"
     volumes:
       - firms-data:/app/data
       - firms-exports:/app/exports
