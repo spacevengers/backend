@@ -53,7 +53,7 @@ func Load() Config {
 		CORSOrigins:        splitCSV(env("CORS_ORIGINS", "http://localhost:3000,http://localhost:3100,http://localhost:5173")),
 		ExportDir:          absPath(env("EXPORT_DIR", filepath.Join(cwd, "exports"))),
 		MaxExportRows:      envInt("MAX_EXPORT_ROWS", 500000),
-		APIAddr:            env("API_ADDR", ":8000"),
+		APIAddr:            env("API_ADDR", ":9999"),
 		SchemaVersion:      env("SCHEMA_VERSION", "0.1.0"),
 		HarmonizerMethod:   env("HARMONIZER_METHOD", "baseline"),
 		HarmonizerEndpoint: env("HARMONIZER_ENDPOINT", ""),
