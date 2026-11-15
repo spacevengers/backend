@@ -1,0 +1,9 @@
+.env
+data/
+exports/
+*.db
+*.db-shm
+*.db-wal
+*.log
+firms
+.DS_Store

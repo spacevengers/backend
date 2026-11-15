@@ -1,0 +1,19 @@
+services:
+  api:
+    build: .
+    environment:
+      DATABASE_PATH: /app/data/firms.db
+      EXPORT_DIR: /app/exports
+      AUTO_MIGRATE: "true"
+      FIRMS_MAP_KEY: ${FIRMS_MAP_KEY:-}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
+    ports:
+      - "8000:8000"
+    volumes:
+      - firms-data:/app/data
+      - firms-exports:/app/exports
+
+volumes:
+  firms-data:
+  firms-exports:
