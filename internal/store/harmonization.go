@@ -358,6 +358,68 @@ func (s *Store) MemberAggregates(
 	return out, nil
 }
 
+type ClusterPrediction struct {
+	ClusterUID    string
+	MemberIDs     []int64
+	PModisDetect  *float64
+	FRPCalibrated *float64
+	MatchStatus   string
+}
+
+func (s *Store) ClusterPredictions(
+	ctx context.Context, runID int64,
+) ([]ClusterPrediction, error) {
+	rows, err := s.DB.QueryContext(ctx, `
+		SELECT ho.cluster_uid, hm.observation_id, ho.p_modis_detect,
+			ho.frp_calibrated, ho.modis_count, ho.viirs_count
+		FROM harmonized_observations ho
+		JOIN harmonized_members hm ON hm.harmonized_id = ho.id
+		WHERE ho.run_id = ?
+		ORDER BY ho.id, hm.id`, runID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	byUID := make(map[string]*ClusterPrediction)
+	order := make([]string, 0)
+	for rows.Next() {
+		var clusterUID string
+		var observationID int64
+		var pModis, frpCalibrated sql.NullFloat64
+		var modisCount, viirsCount int
+		if err := rows.Scan(&clusterUID, &observationID, &pModis, &frpCalibrated,
+			&modisCount, &viirsCount); err != nil {
+			return nil, err
+		}
+		entry, ok := byUID[clusterUID]
+		if !ok {
+			entry = &ClusterPrediction{ClusterUID: clusterUID}
+			switch {
+			case modisCount > 0 && viirsCount > 0:
+				entry.MatchStatus = "matched"
+			case modisCount > 0:
+				entry.MatchStatus = "modis_only"
+			default:
+				entry.MatchStatus = "viirs_only"
+			}
+			entry.PModisDetect = nullFloat(pModis)
+			entry.FRPCalibrated = nullFloat(frpCalibrated)
+			byUID[clusterUID] = entry
+			order = append(order, clusterUID)
+		}
+		entry.MemberIDs = append(entry.MemberIDs, observationID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	out := make([]ClusterPrediction, 0, len(order))
+	for _, uid := range order {
+		out = append(out, *byUID[uid])
+	}
+	return out, nil
+}
+
 func (s *Store) UpdatePredictions(
 	ctx context.Context,
 	runID int64,

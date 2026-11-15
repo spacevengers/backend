@@ -3,12 +3,15 @@ package api
 import (
 	"math"
 	"net/http"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"firms-harmonizer/internal/harmonize"
 	"firms-harmonizer/internal/models"
 	"firms-harmonizer/internal/query"
+	"firms-harmonizer/internal/store"
 	"firms-harmonizer/internal/timeutil"
 )
 
@@ -248,18 +251,74 @@ func (s *Server) handleIntegrationFirms(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if len(rows) == 0 {
-		writeJSON(w, http.StatusOK, map[string]any{
-			"generatedAt": time.Now().UTC().Format(time.RFC3339),
-			"baseTime":    time.Now().UTC().Format(time.RFC3339),
-			"rule": map[string]any{
-				"maxKm": maxDistance, "maxMinutes": pairMinutes, "widestMinutes": widestMinutes,
-			},
-			"sources": []any{}, "modis": []any{}, "viirs": []any{}, "links": []any{},
-		})
-		return
+
+	predictions := make(map[string]store.ClusterPrediction)
+	if latest, latestErr := s.Store.LatestCompletedRunID(r.Context()); latestErr == nil && latest != nil {
+		list, predictionErr := s.Store.ClusterPredictions(r.Context(), *latest)
+		if predictionErr != nil {
+			writeError(w, http.StatusInternalServerError, predictionErr.Error())
+			return
+		}
+		for _, prediction := range list {
+			predictions[clusterKey(prediction.MemberIDs)] = prediction
+		}
 	}
 
+	compact := buildCompact(rows, maxDistance, widestMinutes, predictions)
+	sourceCounts, _ := s.Store.CountsBySource(r.Context(), filter)
+	sources := make([]any, 0, len(sourceCounts))
+	for _, source := range sourceCounts {
+		sources = append(sources, map[string]any{
+			"name": source.Source, "url": "", "rows": source.Count,
+			"updated": nil, "ok": true,
+		})
+	}
+
+	baseTime := time.Now().UTC()
+	if !compact.BaseTime.IsZero() {
+		baseTime = compact.BaseTime
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"generatedAt": time.Now().UTC().Format(time.RFC3339),
+		"baseTime":    timeutil.FormatZ(baseTime),
+		"rule": map[string]any{
+			"maxKm": maxDistance, "maxMinutes": pairMinutes, "widestMinutes": widestMinutes,
+		},
+		"sources":  sources,
+		"modis":    compact.MODISRows,
+		"viirs":    compact.VIIRSRows,
+		"links":    compact.Links,
+		"clusters": compact.Clusters,
+	})
+}
+
+type liveCluster struct {
+	ClusterUID    string   `json:"cluster_uid"`
+	MemberIDs     []string `json:"member_ids"`
+	MatchStatus   string   `json:"match_status"`
+	PModisDetect  *float64 `json:"p_modis_detect"`
+	FRPCalibrated *float64 `json:"frp_calibrated"`
+}
+
+type compactData struct {
+	BaseTime  time.Time
+	MODISRows []any
+	VIIRSRows []any
+	Links     [][]any
+	Clusters  []liveCluster
+}
+
+func buildCompact(
+	rows []models.Observation,
+	maxDistance, maxMinutes float64,
+	predictions map[string]store.ClusterPrediction,
+) compactData {
+	out := compactData{
+		MODISRows: []any{}, VIIRSRows: []any{}, Links: [][]any{}, Clusters: []liveCluster{},
+	}
+	if len(rows) == 0 {
+		return out
+	}
 	base := rows[0].AcquiredAt
 	contract := make([]harmonize.Observation, 0, len(rows))
 	for _, row := range rows {
@@ -283,8 +342,9 @@ func (s *Server) handleIntegrationFirms(w http.ResponseWriter, r *http.Request) 
 		})
 	}
 	matched := harmonize.BaselineHarmonize(contract, harmonize.Params{
-		MaxDistanceKm: maxDistance, MaxTimeMinutes: widestMinutes,
+		MaxDistanceKm: maxDistance, MaxTimeMinutes: maxMinutes,
 	}, "integration")
+	out.BaseTime = base
 
 	modisIndex := make(map[int64]int)
 	viirsIndex := make(map[int64]int)
@@ -311,8 +371,6 @@ func (s *Server) handleIntegrationFirms(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	modisRows := make([]any, 0, len(modisIndex))
-	viirsRows := make([]any, 0, len(viirsIndex))
 	for _, row := range rows {
 		minutes := int(math.Round(row.AcquiredAt.Sub(base).Minutes()))
 		if row.Sensor == "MODIS" {
@@ -322,7 +380,7 @@ func (s *Server) handleIntegrationFirms(w http.ResponseWriter, r *http.Request) 
 				nearestDistance = value
 				nearest = nearestMinutes[row.ID]
 			}
-			modisRows = append(modisRows, []any{
+			out.MODISRows = append(out.MODISRows, []any{
 				round5(row.Longitude), round5(row.Latitude), minutes, round1(valueOrZero(row.FRP)),
 				modisConfidence(row), modisSatelliteIndex(row.Satellite), partnerCount[row.ID],
 				round2(nearestDistance), nearest, valueOrZeroInt(row.FireType),
@@ -332,7 +390,7 @@ func (s *Server) handleIntegrationFirms(w http.ResponseWriter, r *http.Request) 
 			if value, ok := viirsNearest[row.ID]; ok {
 				nearest = value
 			}
-			viirsRows = append(viirsRows, []any{
+			out.VIIRSRows = append(out.VIIRSRows, []any{
 				round5(row.Longitude), round5(row.Latitude), minutes, round1(valueOrZero(row.FRP)),
 				viirsConfidenceIndex(row), viirsSatelliteIndex(row.Satellite), nearest,
 				valueOrZeroInt(row.FireType),
@@ -340,34 +398,48 @@ func (s *Server) handleIntegrationFirms(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	links := make([][]any, 0, len(matched.Matches))
 	for _, match := range matched.Matches {
-		links = append(links, []any{
+		out.Links = append(out.Links, []any{
 			modisIndex[match.MODISObservationID], viirsIndex[match.VIIRSObservationID],
-			match.TimeDeltaMinutes,
+			match.TimeDeltaMinutes, match.DistanceKm,
 		})
 	}
 
-	sourceCounts, _ := s.Store.CountsBySource(r.Context(), filter)
-	sources := make([]any, 0, len(sourceCounts))
-	for _, source := range sourceCounts {
-		sources = append(sources, map[string]any{
-			"name": source.Source, "url": "", "rows": source.Count,
-			"updated": nil, "ok": true,
-		})
+	for _, cluster := range matched.Clusters {
+		ids := make([]int64, 0, len(cluster.Members))
+		memberIDs := make([]string, 0, len(cluster.Members))
+		for _, member := range cluster.Members {
+			ids = append(ids, member.ObservationID)
+			memberIDs = append(memberIDs, strconv.FormatInt(member.ObservationID, 10))
+		}
+		entry := liveCluster{
+			ClusterUID:  cluster.ClusterUID,
+			MemberIDs:   memberIDs,
+			MatchStatus: "viirs_only",
+		}
+		switch {
+		case cluster.MODISCount > 0 && cluster.VIIRSCount > 0:
+			entry.MatchStatus = "matched"
+		case cluster.MODISCount > 0:
+			entry.MatchStatus = "modis_only"
+		}
+		if prediction, ok := predictions[clusterKey(ids)]; ok {
+			entry.PModisDetect = prediction.PModisDetect
+			entry.FRPCalibrated = prediction.FRPCalibrated
+		}
+		out.Clusters = append(out.Clusters, entry)
 	}
+	return out
+}
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"generatedAt": time.Now().UTC().Format(time.RFC3339),
-		"baseTime":    timeutil.FormatZ(base),
-		"rule": map[string]any{
-			"maxKm": maxDistance, "maxMinutes": pairMinutes, "widestMinutes": widestMinutes,
-		},
-		"sources": sources,
-		"modis":   modisRows,
-		"viirs":   viirsRows,
-		"links":   links,
-	})
+func clusterKey(ids []int64) string {
+	copied := append([]int64(nil), ids...)
+	sort.Slice(copied, func(i, j int) bool { return copied[i] < copied[j] })
+	parts := make([]string, 0, len(copied))
+	for _, id := range copied {
+		parts = append(parts, strconv.FormatInt(id, 10))
+	}
+	return strings.Join(parts, ",")
 }
 
 func mapFrontendObservation(row models.Observation) frontendObservation {

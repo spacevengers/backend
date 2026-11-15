@@ -183,11 +183,15 @@ TerraWatch frontend. See `docs/integration.md`.
 | `GET /api/integration/observations` | `Observation[]` |
 | `GET /api/integration/harmonized-observations` | `HarmonizedObservation[]` |
 | `GET /api/integration/statistics` | `{counts, harmonized}` |
-| `GET /api/integration/firms` | compact live-map payload (`modis`, `viirs`, `links`, `rule`) |
+| `GET /api/integration/firms` | compact live-map payload (`modis`, `viirs`, `links`, `rule`, `clusters`) |
+| `GET /api/integration/archive/summary` | monthly calendar summaries |
+| `GET /api/integration/archive/{month}` | compact archive month payload |
 
 All accept `start`, `end`, `bbox`, and repeated `sensor` parameters. The
 `firms` adapter also accepts `max_distance_km`, `pair_minutes`, and
 `max_minutes`; it computes matches on demand and does not persist a run.
+Archive endpoints accept `YYYY-MM` for `start`/`end` (summary) or in the path
+(month), plus `bbox` and `country`.
 
 ## Exports
 

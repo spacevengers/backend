@@ -93,6 +93,27 @@ func TestIntegrationEndpointsAndPredictionImport(t *testing.T) {
 		t.Fatalf("prediction not stored: %+v", detail)
 	}
 
+	status, payload = requestJSON(t, server.Client(), http.MethodGet,
+		server.URL+"/api/integration/firms?start=2024-01-01&end=2024-01-03", nil)
+	if status != http.StatusOK {
+		t.Fatalf("integration firms status %d: %s", status, payload)
+	}
+	firmsPayload := decodeMap(t, payload)
+	clusterPayload, ok := firmsPayload["clusters"].([]any)
+	if !ok || len(clusterPayload) != 4 {
+		t.Fatalf("expected 4 clusters in firms payload: %+v", firmsPayload["clusters"])
+	}
+	foundPrediction := false
+	for _, item := range clusterPayload {
+		cluster := item.(map[string]any)
+		if cluster["p_modis_detect"] != nil && cluster["p_modis_detect"].(float64) == 0.73 {
+			foundPrediction = true
+		}
+	}
+	if !foundPrediction {
+		t.Fatalf("ML prediction not attached to the map payload")
+	}
+
 	status, _ = requestJSON(t, server.Client(), http.MethodPost,
 		server.URL+"/api/harmonization-runs/"+jsonNumber(runID)+"/predictions",
 		map[string]any{
@@ -128,7 +149,7 @@ func TestIntegrationEndpointsAndPredictionImport(t *testing.T) {
 	if status != http.StatusOK {
 		t.Fatalf("integration firms status %d: %s", status, payload)
 	}
-	firmsPayload := decodeMap(t, payload)
+	firmsPayload = decodeMap(t, payload)
 	if len(firmsPayload["modis"].([]any)) != 3 || len(firmsPayload["viirs"].([]any)) != 3 {
 		t.Fatalf("unexpected firms arrays")
 	}
@@ -138,5 +159,31 @@ func TestIntegrationEndpointsAndPredictionImport(t *testing.T) {
 	rule := firmsPayload["rule"].(map[string]any)
 	if rule["maxKm"].(float64) != 1.5 || rule["widestMinutes"].(float64) != 180 {
 		t.Fatalf("unexpected rule: %+v", rule)
+	}
+
+	status, payload = requestJSON(t, server.Client(), http.MethodGet,
+		server.URL+"/api/integration/archive/summary?start=2024-01&end=2024-01&bbox=33.5,-5,42,5.5", nil)
+	if status != http.StatusOK {
+		t.Fatalf("archive summary status %d: %s", status, payload)
+	}
+	archive := decodeMap(t, payload)
+	monthSummary := archive["months"].(map[string]any)["2024-01"].(map[string]any)
+	if monthSummary["modis"].(float64) != 3 || monthSummary["viirs"].(float64) != 3 ||
+		monthSummary["pairs"].(float64) != 2 || monthSummary["harmonized"].(float64) != 4 {
+		t.Fatalf("unexpected archive summary: %+v", monthSummary)
+	}
+	if monthSummary["terraPaired"].(float64) != 2 || monthSummary["aquaPaired"].(float64) != 0 {
+		t.Fatalf("unexpected archive pairing counts: %+v", monthSummary)
+	}
+
+	status, payload = requestJSON(t, server.Client(), http.MethodGet,
+		server.URL+"/api/integration/archive/2024-01?bbox=33.5,-5,42,5.5", nil)
+	if status != http.StatusOK {
+		t.Fatalf("archive month status %d: %s", status, payload)
+	}
+	month := decodeMap(t, payload)
+	if len(month["modis"].([]any)) != 3 || len(month["viirs"].([]any)) != 3 ||
+		len(month["links"].([]any)) != 2 {
+		t.Fatalf("unexpected archive month payload")
 	}
 }

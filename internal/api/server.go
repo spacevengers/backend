@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"firms-harmonizer/internal/config"
@@ -22,6 +23,9 @@ type Server struct {
 	Store   *store.Store
 	Exports *export.Service
 	Client  *firms.Client
+
+	archiveMu    sync.Mutex
+	archiveCache map[string]archiveMonthResult
 }
 
 func New(cfg config.Config, repository *store.Store) *Server {
@@ -37,6 +41,7 @@ func New(cfg config.Config, repository *store.Store) *Server {
 			cfg.FirmsMapKey, cfg.FirmsBaseURL, cfg.FirmsTimeout,
 			cfg.FirmsMaxRetries, cfg.FirmsMaxDays, cfg.FirmsRequestDelay,
 		),
+		archiveCache: make(map[string]archiveMonthResult),
 	}
 }
 
@@ -74,6 +79,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/integration/harmonized-observations", s.handleIntegrationHarmonized)
 	mux.HandleFunc("GET /api/integration/statistics", s.handleIntegrationStatistics)
 	mux.HandleFunc("GET /api/integration/firms", s.handleIntegrationFirms)
+	mux.HandleFunc("GET /api/integration/archive/summary", s.handleIntegrationArchiveSummary)
+	mux.HandleFunc("GET /api/integration/archive/{month}", s.handleIntegrationArchiveMonth)
 
 	return s.withCORS(s.withRecovery(mux))
 }

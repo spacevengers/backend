@@ -20,7 +20,8 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 
 The frontend has a **Backend · month** mode on the map and globe when the
 variable is set. It requests one month at a time for the selected area (Kenya
-by default) and reuses the existing live-map renderer.
+by default) and reuses the existing live-map renderer. The calendar also uses
+the backend archive summary when an area is selected.
 
 ### Adapter endpoints
 
@@ -32,7 +33,9 @@ These return the shapes in `frontend/src/lib/types.ts` and
 | `GET /api/integration/observations` | `Observation[]` |
 | `GET /api/integration/harmonized-observations` | `HarmonizedObservation[]` |
 | `GET /api/integration/statistics` | `{counts, harmonized}` |
-| `GET /api/integration/firms` | compact `LiveFirms` payload (modis/viirs arrays + links) |
+| `GET /api/integration/firms` | compact `LiveFirms` payload (modis/viirs arrays + links + cluster predictions) |
+| `GET /api/integration/archive/summary` | monthly calendar summaries (`ArchiveSummary`) |
+| `GET /api/integration/archive/{month}` | compact month payload (`ArchiveMonth`) |
 
 Common query parameters: `start`, `end`, `bbox`, repeated `sensor`, and
 optionally `run_id`. `firms` also accepts:
@@ -112,9 +115,10 @@ shows “not produced” otherwise.
 
 ## Known gaps
 
-- The calendar screen still reads the frontend's static Kenya archive. An
-  archive-summary adapter is the next integration step.
+- The calendar falls back to the frontend's static Kenya archive when the
+  backend is unreachable.
 - ML serving is not implemented in the ML repository yet; the batch import and
   remote HTTP contract are ready.
 - The frontend's Backend mode requests at most one month and 100,000
   observations per call. Use the native paginated API for larger extracts.
+- Archive summaries are cached for 10 minutes and capped at 120 months.
