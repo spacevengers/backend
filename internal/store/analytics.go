@@ -140,6 +140,34 @@ func (s *Store) CountsByConfidence(ctx context.Context, filter query.Observation
 	return out, rows.Err()
 }
 
+type SourceCount struct {
+	Source string `json:"source"`
+	Count  int    `json:"count"`
+}
+
+func (s *Store) CountsBySource(ctx context.Context, filter query.ObservationFilter) ([]SourceCount, error) {
+	where, args := filter.Where()
+	statement := "SELECT source, COUNT(*) FROM observations"
+	if where != "" {
+		statement += " WHERE " + where
+	}
+	statement += " GROUP BY source ORDER BY source"
+	rows, err := s.DB.QueryContext(ctx, statement, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []SourceCount
+	for rows.Next() {
+		var row SourceCount
+		if err := rows.Scan(&row.Source, &row.Count); err != nil {
+			return nil, err
+		}
+		out = append(out, row)
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) FRPValuesBySensor(ctx context.Context, filter query.ObservationFilter) (map[string][]float64, error) {
 	where, args := filter.Where()
 	statement := "SELECT sensor, frp FROM observations WHERE frp IS NOT NULL"

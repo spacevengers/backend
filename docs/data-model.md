@@ -53,7 +53,11 @@ Method, parameters, filters, status, input/cluster/match counts, and metrics
 
 A cross-sensor cluster: centroid, start/end time, sensor counts, satellites,
 FRP totals, confidence summary, uncertainty (`spatial_radius_km`,
-`time_span_minutes`).
+`time_span_minutes`), and optional ML outputs:
+
+- `p_modis_detect` — probability in `[0, 1]`;
+- `frp_calibrated` — calibrated FRP in MW;
+- `prediction_model` — model/version label.
 
 A cluster is an **analytical grouping**, not proof that the members are the
 same fire event.

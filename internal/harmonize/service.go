@@ -261,6 +261,12 @@ func validateResponse(response Response, observations []Observation) error {
 			cluster.MODISCount != computedMODIS || cluster.VIIRSCount != computedVIIRS {
 			return fmt.Errorf("cluster %s has inconsistent member counts", cluster.ClusterUID)
 		}
+		if cluster.PModisDetect != nil && (*cluster.PModisDetect < 0 || *cluster.PModisDetect > 1) {
+			return fmt.Errorf("cluster %s p_modis_detect must be in [0, 1]", cluster.ClusterUID)
+		}
+		if cluster.FRPCalibrated != nil && *cluster.FRPCalibrated < 0 {
+			return fmt.Errorf("cluster %s frp_calibrated must be non-negative", cluster.ClusterUID)
+		}
 	}
 	if len(seen) != len(sensors) {
 		return fmt.Errorf("harmonizer response covers %d of %d observations", len(seen), len(sensors))
@@ -320,6 +326,9 @@ func clusterModel(cluster Cluster) models.HarmonizedObservation {
 		MeanFRP:           cluster.MeanFRP,
 		ConfidenceSummary: models.JSONText(confidence),
 		Uncertainty:       models.JSONText(uncertainty),
+		PModisDetect:      cluster.PModisDetect,
+		FRPCalibrated:     cluster.FRPCalibrated,
+		PredictionModel:   optionalString(cluster.PredictionModel),
 		Members:           members,
 	}
 }
@@ -336,5 +345,12 @@ func matchModel(runID int64, method string, match Match) models.ObservationMatch
 }
 
 func ptrString(value string) *string {
+	return &value
+}
+
+func optionalString(value string) *string {
+	if value == "" {
+		return nil
+	}
 	return &value
 }

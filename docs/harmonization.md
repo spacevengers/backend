@@ -113,7 +113,10 @@ contract violation marks the run failed with the error preserved.
       "total_frp": 22.5,
       "mean_frp": 11.25,
       "confidence_summary": {"high": 2},
-      "uncertainty": {"spatial_radius_km": 0.06, "time_span_minutes": 2.0}
+      "uncertainty": {"spatial_radius_km": 0.06, "time_span_minutes": 2.0},
+      "p_modis_detect": 0.73,
+      "frp_calibrated": 11.25,
+      "prediction_model": "lightgbm-2026-11-15"
     }
   ],
   "matches": [
@@ -138,7 +141,14 @@ Validation rules:
 - `observation_count`, `modis_count`, and `viirs_count` match the member list;
 - cluster UIDs are unique;
 - matches reference input observations with the correct sensor roles;
+- `p_modis_detect`, when present, is in `[0, 1]`;
+- `frp_calibrated`, when present, is non-negative;
 - JSON is UTF-8 and fits in memory (no streaming yet).
+
+Predictions may also be imported after a run with
+`POST /api/harmonization-runs/{id}/predictions` (or
+`firms import-predictions`). That path is useful when the ML component runs as
+a batch job rather than an HTTP service. See `docs/integration.md`.
 
 ### Implementing the ML service
 

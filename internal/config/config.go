@@ -50,7 +50,7 @@ func Load() Config {
 		FirmsMaxDays:       envInt("FIRMS_MAX_DAYS_PER_REQUEST", 5),
 		DefaultBBox:        env("DEFAULT_BBOX", "33.5,-5.0,42.0,5.5"),
 		AdminToken:         env("ADMIN_TOKEN", ""),
-		CORSOrigins:        splitCSV(env("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173")),
+		CORSOrigins:        splitCSV(env("CORS_ORIGINS", "http://localhost:3000,http://localhost:3100,http://localhost:5173")),
 		ExportDir:          absPath(env("EXPORT_DIR", filepath.Join(cwd, "exports"))),
 		MaxExportRows:      envInt("MAX_EXPORT_ROWS", 500000),
 		APIAddr:            env("API_ADDR", ":8000"),

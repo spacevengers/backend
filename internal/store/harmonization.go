@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"strings"
 	"time"
 
@@ -11,6 +12,12 @@ import (
 	"firms-harmonizer/internal/query"
 	"firms-harmonizer/internal/timeutil"
 )
+
+type Prediction struct {
+	ClusterUID    string   `json:"cluster_uid"`
+	PModisDetect  *float64 `json:"p_modis_detect,omitempty"`
+	FRPCalibrated *float64 `json:"frp_calibrated,omitempty"`
+}
 
 func (s *Store) CreateHarmonizationRun(ctx context.Context, run *models.HarmonizationRun) error {
 	if run.CreatedAt.IsZero() {
@@ -160,8 +167,8 @@ func (s *Store) ReplaceHarmonizationOutputs(
 				cluster_uid, run_id, centroid_latitude, centroid_longitude,
 				start_time, end_time, observation_count, modis_count, viirs_count,
 				satellites, total_frp, mean_frp, confidence_summary, uncertainty,
-				created_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+				p_modis_detect, frp_calibrated, prediction_model, created_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 		if err != nil {
 			return err
 		}
@@ -182,7 +189,8 @@ func (s *Store) ReplaceHarmonizationOutputs(
 				timeutil.Milli(cluster.EndTime), cluster.ObservationCount,
 				cluster.MODISCount, cluster.VIIRSCount, string(cluster.Satellites),
 				cluster.TotalFRP, cluster.MeanFRP, string(cluster.ConfidenceSummary),
-				string(cluster.Uncertainty), timeutil.Milli(now))
+				string(cluster.Uncertainty), cluster.PModisDetect, cluster.FRPCalibrated,
+				cluster.PredictionModel, timeutil.Milli(now))
 			if err != nil {
 				return err
 			}
@@ -226,7 +234,8 @@ func (s *Store) ReplaceHarmonizationOutputs(
 const harmonizedColumns = `
 	id, cluster_uid, run_id, centroid_latitude, centroid_longitude,
 	start_time, end_time, observation_count, modis_count, viirs_count,
-	satellites, total_frp, mean_frp, confidence_summary, uncertainty, created_at`
+	satellites, total_frp, mean_frp, confidence_summary, uncertainty,
+	p_modis_detect, frp_calibrated, prediction_model, created_at`
 
 type clusterScan struct {
 	id                     int64
@@ -241,6 +250,9 @@ type clusterScan struct {
 	totalFRP, meanFRP      sql.NullFloat64
 	confidenceSummary      string
 	uncertainty            string
+	pModisDetect           sql.NullFloat64
+	frpCalibrated          sql.NullFloat64
+	predictionModel        sql.NullString
 	createdAt              int64
 }
 
@@ -249,7 +261,8 @@ func (c *clusterScan) dest() []any {
 		&c.id, &c.clusterUID, &c.runID, &c.centroidLatitude,
 		&c.centroidLongitude, &c.startTime, &c.endTime, &c.observationCount,
 		&c.modisCount, &c.viirsCount, &c.satellites, &c.totalFRP, &c.meanFRP,
-		&c.confidenceSummary, &c.uncertainty, &c.createdAt,
+		&c.confidenceSummary, &c.uncertainty, &c.pModisDetect, &c.frpCalibrated,
+		&c.predictionModel, &c.createdAt,
 	}
 }
 
@@ -270,9 +283,172 @@ func (c *clusterScan) model() models.HarmonizedObservation {
 		MeanFRP:           nullFloat(c.meanFRP),
 		ConfidenceSummary: models.JSONText(c.confidenceSummary),
 		Uncertainty:       models.JSONText(c.uncertainty),
+		PModisDetect:      nullFloat(c.pModisDetect),
+		FRPCalibrated:     nullFloat(c.frpCalibrated),
+		PredictionModel:   nullString(c.predictionModel),
 		CreatedAt:         timeutil.FromMilli(c.createdAt),
 		Members:           []models.HarmonizedMember{},
 	}
+}
+
+type ClusterMembers struct {
+	MemberIDs []int64
+	FRPVIIRS  *float64
+	FRPMODIS  *float64
+}
+
+func (s *Store) MemberAggregates(
+	ctx context.Context, harmonizedIDs []int64,
+) (map[int64]ClusterMembers, error) {
+	out := make(map[int64]ClusterMembers, len(harmonizedIDs))
+	if len(harmonizedIDs) == 0 {
+		return out, nil
+	}
+	for start := 0; start < len(harmonizedIDs); start += 400 {
+		end := min(start+400, len(harmonizedIDs))
+		chunk := harmonizedIDs[start:end]
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(chunk)), ",")
+		args := make([]any, 0, len(chunk))
+		for _, id := range chunk {
+			args = append(args, id)
+		}
+		rows, err := s.DB.QueryContext(ctx, `
+			SELECT hm.harmonized_id, hm.observation_id, hm.role, o.frp
+			FROM harmonized_members hm
+			JOIN observations o ON o.id = hm.observation_id
+			WHERE hm.harmonized_id IN (`+placeholders+`)
+			ORDER BY hm.id`, args...)
+		if err != nil {
+			return nil, err
+		}
+		for rows.Next() {
+			var harmonizedID, observationID int64
+			var role string
+			var frp sql.NullFloat64
+			if err := rows.Scan(&harmonizedID, &observationID, &role, &frp); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			aggregate := out[harmonizedID]
+			aggregate.MemberIDs = append(aggregate.MemberIDs, observationID)
+			if frp.Valid {
+				switch role {
+				case "viirs":
+					value := frp.Float64
+					if aggregate.FRPVIIRS == nil {
+						aggregate.FRPVIIRS = &value
+					} else {
+						*aggregate.FRPVIIRS += value
+					}
+				case "modis":
+					value := frp.Float64
+					if aggregate.FRPMODIS == nil {
+						aggregate.FRPMODIS = &value
+					} else {
+						*aggregate.FRPMODIS += value
+					}
+				}
+			}
+			out[harmonizedID] = aggregate
+		}
+		if err := rows.Close(); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+func (s *Store) UpdatePredictions(
+	ctx context.Context,
+	runID int64,
+	model string,
+	predictions []Prediction,
+) (int, error) {
+	if model == "" {
+		model = "external"
+	}
+	seen := make(map[string]struct{}, len(predictions))
+	err := db.WithTx(ctx, s.DB, func(tx *sql.Tx) error {
+		statement, err := tx.PrepareContext(ctx, `
+			UPDATE harmonized_observations SET
+				p_modis_detect = COALESCE(?, p_modis_detect),
+				frp_calibrated = COALESCE(?, frp_calibrated),
+				prediction_model = ?
+			WHERE run_id = ? AND cluster_uid = ?`)
+		if err != nil {
+			return err
+		}
+		defer statement.Close()
+		for _, prediction := range predictions {
+			if prediction.ClusterUID == "" {
+				return fmt.Errorf("cluster_uid is required")
+			}
+			if _, duplicate := seen[prediction.ClusterUID]; duplicate {
+				return fmt.Errorf("duplicate cluster_uid %q", prediction.ClusterUID)
+			}
+			seen[prediction.ClusterUID] = struct{}{}
+			if prediction.PModisDetect == nil && prediction.FRPCalibrated == nil {
+				return fmt.Errorf("cluster %q has no prediction values", prediction.ClusterUID)
+			}
+			if prediction.PModisDetect != nil &&
+				(*prediction.PModisDetect < 0 || *prediction.PModisDetect > 1) {
+				return fmt.Errorf("cluster %q p_modis_detect must be in [0, 1]", prediction.ClusterUID)
+			}
+			if prediction.FRPCalibrated != nil && *prediction.FRPCalibrated < 0 {
+				return fmt.Errorf("cluster %q frp_calibrated must be non-negative", prediction.ClusterUID)
+			}
+			result, err := statement.ExecContext(ctx,
+				prediction.PModisDetect, prediction.FRPCalibrated, model, runID,
+				prediction.ClusterUID)
+			if err != nil {
+				return err
+			}
+			affected, err := result.RowsAffected()
+			if err != nil {
+				return err
+			}
+			if affected != 1 {
+				return fmt.Errorf("cluster %q not found in run %d", prediction.ClusterUID, runID)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return len(predictions), nil
+}
+
+func (s *Store) CountHarmonizedByStatus(
+	ctx context.Context, filter query.HarmonizedFilter,
+) (map[string]int, error) {
+	where, args := filter.Where()
+	statement := `
+		SELECT CASE
+			WHEN modis_count > 0 AND viirs_count > 0 THEN 'matched'
+			WHEN modis_count > 0 THEN 'modis_only'
+			ELSE 'viirs_only'
+		END AS status, COUNT(*)
+		FROM harmonized_observations`
+	if where != "" {
+		statement += " WHERE " + where
+	}
+	statement += " GROUP BY status"
+	rows, err := s.DB.QueryContext(ctx, statement, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]int{"matched": 0, "modis_only": 0, "viirs_only": 0}
+	for rows.Next() {
+		var status string
+		var count int
+		if err := rows.Scan(&status, &count); err != nil {
+			return nil, err
+		}
+		out[status] = count
+	}
+	return out, rows.Err()
 }
 
 func (s *Store) CountHarmonized(ctx context.Context, filter query.HarmonizedFilter) (int, error) {

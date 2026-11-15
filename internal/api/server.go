@@ -59,6 +59,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/harmonization-runs", s.handleHarmonizationList)
 	mux.HandleFunc("GET /api/harmonization-runs/{id}", s.handleHarmonizationDetail)
 	mux.HandleFunc("POST /api/harmonization-runs/{id}/execute", s.handleHarmonizationRetry)
+	mux.HandleFunc("POST /api/harmonization-runs/{id}/predictions", s.handlePredictionImport)
 
 	mux.HandleFunc("GET /api/statistics", s.handleStatistics)
 	mux.HandleFunc("GET /api/comparisons", s.handleComparisons)
@@ -68,6 +69,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/exports", s.handleExportList)
 	mux.HandleFunc("GET /api/exports/{uid}", s.handleExportDetail)
 	mux.HandleFunc("GET /api/exports/{uid}/download", s.handleExportDownload)
+
+	mux.HandleFunc("GET /api/integration/observations", s.handleIntegrationObservations)
+	mux.HandleFunc("GET /api/integration/harmonized-observations", s.handleIntegrationHarmonized)
+	mux.HandleFunc("GET /api/integration/statistics", s.handleIntegrationStatistics)
+	mux.HandleFunc("GET /api/integration/firms", s.handleIntegrationFirms)
 
 	return s.withCORS(s.withRecovery(mux))
 }

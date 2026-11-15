@@ -11,6 +11,7 @@ import (
 	"firms-harmonizer/internal/harmonize"
 	"firms-harmonizer/internal/models"
 	"firms-harmonizer/internal/query"
+	"firms-harmonizer/internal/store"
 )
 
 type harmonizationRequest struct {
@@ -131,6 +132,52 @@ func (s *Server) handleHarmonizationDetail(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	writeJSON(w, http.StatusOK, run)
+}
+
+type predictionImportRequest struct {
+	Model       string             `json:"model"`
+	Predictions []store.Prediction `json:"predictions"`
+}
+
+func (s *Server) handlePredictionImport(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdmin(w, r) {
+		return
+	}
+	id, err := parsePathID(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid harmonization run id")
+		return
+	}
+	var payload predictionImportRequest
+	if err := decodeJSON(w, r, &payload); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if len(payload.Predictions) == 0 {
+		writeError(w, http.StatusUnprocessableEntity, "predictions must not be empty")
+		return
+	}
+	run, err := s.Store.GetHarmonizationRun(r.Context(), id)
+	if errors.Is(err, sql.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "harmonization run not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if run.Status != "completed" {
+		writeError(w, http.StatusConflict, "predictions require a completed harmonization run")
+		return
+	}
+	updated, err := s.Store.UpdatePredictions(r.Context(), run.ID, payload.Model, payload.Predictions)
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"run_id": run.ID, "model": payload.Model, "updated": updated,
+	})
 }
 
 func (s *Server) handleHarmonizationRetry(w http.ResponseWriter, r *http.Request) {

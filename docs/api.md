@@ -152,6 +152,43 @@ Run status and counts; detail includes stored row errors.
 Queues a run. `GET /api/harmonization-runs` lists runs;
 `POST /api/harmonization-runs/{id}/execute` retries a pending/failed run.
 
+### `GET /api/harmonization-runs` and `GET /api/harmonization-runs/{id}`
+
+Run status, counts, parameters, filters, and metrics.
+
+### `POST /api/harmonization-runs/{id}/predictions` *(admin)*
+
+Imports ML outputs for the clusters of a completed run:
+
+```json
+{
+  "model": "lightgbm-2026-11-15",
+  "predictions": [
+    {"cluster_uid": "abc...", "p_modis_detect": 0.73, "frp_calibrated": 11.25}
+  ]
+}
+```
+
+At least one of `p_modis_detect` and `frp_calibrated` is required per item.
+The import is all-or-nothing: unknown or duplicate cluster UIDs, probabilities
+outside `[0, 1]`, or negative calibrated FRP reject the batch.
+
+## Frontend integration adapters
+
+These endpoints preserve the native API but return the shapes used by the
+TerraWatch frontend. See `docs/integration.md`.
+
+| Endpoint | Returns |
+| --- | --- |
+| `GET /api/integration/observations` | `Observation[]` |
+| `GET /api/integration/harmonized-observations` | `HarmonizedObservation[]` |
+| `GET /api/integration/statistics` | `{counts, harmonized}` |
+| `GET /api/integration/firms` | compact live-map payload (`modis`, `viirs`, `links`, `rule`) |
+
+All accept `start`, `end`, `bbox`, and repeated `sensor` parameters. The
+`firms` adapter also accepts `max_distance_km`, `pair_minutes`, and
+`max_minutes`; it computes matches on demand and does not persist a run.
+
 ## Exports
 
 ### `POST /api/exports` *(admin)*

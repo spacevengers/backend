@@ -53,6 +53,9 @@ type Cluster struct {
 	MeanFRP           *float64       `json:"mean_frp"`
 	ConfidenceSummary map[string]int `json:"confidence_summary"`
 	Uncertainty       map[string]any `json:"uncertainty"`
+	PModisDetect      *float64       `json:"p_modis_detect,omitempty"`
+	FRPCalibrated     *float64       `json:"frp_calibrated,omitempty"`
+	PredictionModel   string         `json:"prediction_model,omitempty"`
 }
 
 type Match struct {

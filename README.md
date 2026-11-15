@@ -75,8 +75,18 @@ go run ./cmd/firms ingest-file \
   --source VIIRS_SNPP_SP --file sample.csv
 go run ./cmd/firms harmonize \
   --start 2024-01-01 --end 2024-01-31 --max-distance 2 --max-time 180
+go run ./cmd/firms import-predictions \
+  --run-id 1 --file predictions.json --model lightgbm-2026-11-15
 go run ./cmd/firms stats --start 2024-01-01 --end 2024-01-31
 ```
+
+## Integration
+
+- The frontend calls `/api/integration/*` view adapters for its map, globe, and
+  statistics views.
+- ML can return predictions through the remote harmonizer contract or import
+  batch predictions with `firms import-predictions`.
+- See [`docs/integration.md`](docs/integration.md) for the full handoff.
 
 ## Scientific guardrails
 

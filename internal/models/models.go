@@ -128,6 +128,9 @@ type HarmonizedObservation struct {
 	MeanFRP           *float64           `json:"mean_frp"`
 	ConfidenceSummary JSONText           `json:"confidence_summary"`
 	Uncertainty       JSONText           `json:"uncertainty"`
+	PModisDetect      *float64           `json:"p_modis_detect"`
+	FRPCalibrated     *float64           `json:"frp_calibrated"`
+	PredictionModel   *string            `json:"prediction_model"`
 	CreatedAt         time.Time          `json:"created_at"`
 	Members           []HarmonizedMember `json:"members"`
 }

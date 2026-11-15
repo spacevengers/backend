@@ -31,6 +31,7 @@ var harmonizedColumns = []string{
 	"id", "cluster_uid", "run_id", "centroid_latitude", "centroid_longitude",
 	"start_time", "end_time", "observation_count", "modis_count", "viirs_count",
 	"satellites", "total_frp", "mean_frp", "confidence_summary", "uncertainty",
+	"p_modis_detect", "frp_calibrated", "prediction_model",
 }
 
 type Service struct {
@@ -259,6 +260,9 @@ func (s *Service) writeHarmonizedCSV(
 			floatValue(cluster.MeanFRP),
 			string(cluster.ConfidenceSummary),
 			string(cluster.Uncertainty),
+			floatValue(cluster.PModisDetect),
+			floatValue(cluster.FRPCalibrated),
+			stringValue(cluster.PredictionModel),
 		}
 		return writer.Write(record)
 	})
@@ -310,6 +314,9 @@ func (s *Service) writeHarmonizedGeoJSON(
 				"mean_frp":           cluster.MeanFRP,
 				"confidence_summary": cluster.ConfidenceSummary,
 				"uncertainty":        cluster.Uncertainty,
+				"p_modis_detect":     cluster.PModisDetect,
+				"frp_calibrated":     cluster.FRPCalibrated,
+				"prediction_model":   cluster.PredictionModel,
 			},
 		}
 		return encoder.Encode(feature)

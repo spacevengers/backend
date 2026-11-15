@@ -21,6 +21,9 @@ This is the backend's decision log. Update it as the team agrees on scope.
 | Exports | Synchronous CSV/GeoJSON with row cap | Simple and auditable; move to a queue if exports grow. |
 | Background work | In-process goroutines, persisted runs | Avoids a broker for the first version. |
 | API docs | Markdown contract | The standard library server does not generate OpenAPI. |
+| Frontend contract | `/api/integration/*` view adapters | Keeps the native API stable while matching the existing UI data shapes. |
+| ML predictions | Stored on clusters (`p_modis_detect`, `frp_calibrated`) | Lets both a remote service and a batch job feed the same output. |
+| ML import | All-or-nothing, keyed by `cluster_uid` | Prevents partially applied or mislinked predictions. |
 
 ## Assumptions to verify
 
