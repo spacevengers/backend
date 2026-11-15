@@ -11,8 +11,15 @@ fi
 
 podman rm -f space-backend >/dev/null 2>&1 || true
 
+ENV_ARGS=()
+if [[ -f .env ]]; then
+  ENV_ARGS=(--env-file .env)
+else
+  echo "No .env found; using container defaults (set FIRMS_MAP_KEY/ADMIN_TOKEN later if needed)."
+fi
+
 podman run -d --name space-backend --network host \
-  --env-file .env \
+  "${ENV_ARGS[@]}" \
   -e DATABASE_PATH=/app/data/firms.db \
   -e EXPORT_DIR=/app/exports \
   -e API_ADDR=:9999 \
