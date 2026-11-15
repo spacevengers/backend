@@ -28,7 +28,8 @@ go run ./cmd/firms serve
 - One-command demo data: `./scripts/demo.sh` (does not start the API)
 - Presentation runbook: [`docs/demo.md`](docs/demo.md)
 - Tests: `go test ./...`
-- Docker: `docker compose up --build`
+- Docker/Podman: `podman compose up -d --build` (see
+  [`docs/deployment.md`](docs/deployment.md))
 
 ## Stack
 
